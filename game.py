@@ -10,6 +10,8 @@ SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Galaga-like Game")
+GREEN = (0, 255, 0)
+
 
 # Load images
 background_image = pygame.image.load('background.jpg')
@@ -108,35 +110,38 @@ def draw_boss(x, y, health):
 
 
 def update_bullets():
-    global bullets, score
+    global bullets, score, boss, boss_appears
+
     for bullet in bullets[:]:
         if bullet.get('is_enemy'):
-            bullet['y'] += enemy_bullet_speed  # Enemies bullets move downwards
+            bullet['y'] += enemy_bullet_speed
         else:
-            bullet['y'] -= bullet_speed  # Player bullets move upwards
+            bullet['y'] -= bullet_speed
 
         if bullet['y'] < 0 or bullet['y'] > SCREEN_HEIGHT:
             bullets.remove(bullet)
             continue
 
-        # Check collision with enemies
-        for enemy in enemies[:]:
-            if (enemy['x'] < bullet['x'] < enemy['x'] + ENEMY_WIDTH or enemy['x'] < bullet['x'] + BULLET_WIDTH < enemy['x'] + ENEMY_WIDTH) and (enemy['y'] < bullet['y'] < enemy['y'] + ENEMY_HEIGHT or enemy['y'] < bullet['y'] + BULLET_HEIGHT < enemy['y'] + ENEMY_HEIGHT):
-                enemy['health'] -= 1
+        # Check collision with boss
+        if boss_appears and boss:
+            if (boss['x'] < bullet['x'] < boss['x'] + boss_image.get_width() or boss['x'] < bullet['x'] + BULLET_WIDTH < boss['x'] + boss_image.get_width()) and (boss['y'] < bullet['y'] < boss['y'] + boss_image.get_height() or boss['y'] < bullet['y'] + BULLET_HEIGHT < boss['y'] + boss_image.get_height()):
+                boss['health'] -= 1
                 bullets.remove(bullet)
-                if enemy['health'] <= 0:
-                    enemies.remove(enemy)
-                    score += 1
-                    explosions.append({'x': enemy['x'], 'y': enemy['y']})
-                    explosion_sound.play()
+                if boss['health'] <= 0:
+                    print("Boss defeated")
+                    boss = None
+                    boss_appears = False
+                    return False
                 break
-        
+
         # Check collision with player
         if bullet.get('is_enemy'):
             if (spaceship_x < bullet['x'] < spaceship_x + SPACESHIP_WIDTH or spaceship_x < bullet['x'] + BULLET_WIDTH < spaceship_x + SPACESHIP_WIDTH) and (spaceship_y < bullet['y'] < spaceship_y + SPACESHIP_HEIGHT or spaceship_y < bullet['y'] + BULLET_HEIGHT < spaceship_y + SPACESHIP_HEIGHT):
-                return True  # Player hit by enemy bullet
+                return True
 
     return False
+
+
 
 def check_enemy_collisions():
     for enemy in enemies[:]:
@@ -144,58 +149,6 @@ def check_enemy_collisions():
             return True  # Enemy has collided with the player
     return False
 
-def update_enemies():
-    global enemies, last_enemy_burst, enemy_entrance_timer, boss, boss_appears
-
-    current_time = pygame.time.get_ticks()
-
-    if boss_appears:
-        if boss:
-            # Move boss left and right
-            boss['x'] += boss['dx']
-            if boss['x'] <= 0 or boss['x'] >= SCREEN_WIDTH - boss_image.get_width():
-                boss['dx'] *= -1
-
-            # Boss fires multiple bullets
-            if current_time - last_enemy_burst > enemy_fire_rate:
-                for i in range(-1, 2):  # Fire 3 bullets
-                    bullets.append({'x': boss['x'] + boss_image.get_width() // 2 - BULLET_WIDTH // 2, 'y': boss['y'] + boss_image.get_height(), 'is_enemy': True})
-                enemy_laser_sound.play()
-                last_enemy_burst = current_time
-
-            # Check if boss is defeated
-            if boss['health'] <= 0:
-                boss = None
-                boss_appears = False
-                return False  # Boss defeated, game mode transition
-        return False
-
-    # Regular enemies
-    for enemy in enemies[:]:
-        # Move enemies left and right within a boundary
-        enemy['x'] += enemy['dx']
-
-        if enemy['x'] <= 0 or enemy['x'] >= SCREEN_WIDTH - ENEMY_WIDTH:
-            enemy['dx'] *= -1
-
-    # Fire bullets from enemies at regular intervals
-    if current_time - last_enemy_burst > enemy_fire_rate:
-        for enemy in enemies:
-            bullets.append({'x': enemy['x'] + ENEMY_WIDTH // 2 - BULLET_WIDTH // 2, 'y': enemy['y'] + ENEMY_HEIGHT, 'is_enemy': True})
-            enemy_laser_sound.play()
-        last_enemy_burst = current_time
-
-    # Handle entrance animation for enemies
-    if enemies and (current_time - enemy_entrance_timer < 3000):  # 3 seconds for animation
-        for enemy in enemies:
-            if enemy['y'] < enemy['target_y']:
-                enemy['y'] += enemy_speed
-                if enemy['y'] > enemy['target_y']:
-                    enemy['y'] = enemy['target_y']
-    else:
-        enemy_entrance_timer = current_time  # Reset timer after animation
-
-    return False
 
 def draw_start_menu():
     screen.fill(BLACK)
@@ -220,14 +173,17 @@ def reset_game():
     spaceship_y = SCREEN_HEIGHT - SPACESHIP_HEIGHT - 10
     bullets = []
     enemies = []
-    explosions = []
-    score = 0
-    wave = 1
-    enemy_fire_rate = 2000
-    enemy_health = 3
     game_active = True
+    wave = 1
+    highscore = 0
+    explosions = []
+    enemy_health = 3
+    score = 0
+    enemy_fire_rate = 1000  # Example value for firing rate
     boss = None
-    boss_appears = False
+    boss_appears = False  # Ensure it is initialized
+
+
 
 def spawn_enemies():
     global enemies, boss_appears, boss
@@ -236,9 +192,9 @@ def spawn_enemies():
         print("Spawning boss")  # Debug print statement
         boss_appears = True
         # Start the boss just off-screen above
-        boss = {'x': SCREEN_WIDTH // 2 - boss_image.get_width() // 2, 'y': -boss_image.get_height(), 'dx': 2, 'health': boss_health}
-        pygame.time.wait(2000)  # Boss entrance delay
-        boss_music.play(-1)  # Loop boss music
+        boss = {'x': SCREEN_WIDTH // 2 - boss_image.get_width() // 2, 'y': -boss_image.get_height(), 'dx': 2, 'dy': 2, 'health': boss_health}
+        pygame.mixer.music.load('boss.mp3')
+        pygame.mixer.music.play(-1)  # Loop boss music
         return
 
     # Regular enemies
@@ -246,6 +202,15 @@ def spawn_enemies():
     while len(enemies) < min(num_enemies, max_enemies_on_screen):
         x = random.randint(0, SCREEN_WIDTH - ENEMY_WIDTH)
         enemies.append({'x': x, 'y': -ENEMY_HEIGHT, 'dx': random.choice([-1, 1]), 'target_y': random.randint(100, SCREEN_HEIGHT // 2), 'health': enemy_health})
+
+
+    # Regular enemies
+    num_enemies = int(wave * 0.5 * 10)  # Calculate the number of enemies for the current wave
+    while len(enemies) < min(num_enemies, max_enemies_on_screen):
+        x = random.randint(0, SCREEN_WIDTH - ENEMY_WIDTH)
+        enemies.append({'x': x, 'y': -ENEMY_HEIGHT, 'dx': random.choice([-1, 1]), 'target_y': random.randint(100, SCREEN_HEIGHT // 2), 'health': enemy_health})
+
+
 
 
 def update_enemies():
@@ -260,14 +225,14 @@ def update_enemies():
             if boss['x'] <= 0 or boss['x'] >= SCREEN_WIDTH - boss_image.get_width():
                 boss['dx'] *= -1
 
-            # Move boss down into view
-            if boss['y'] < SCREEN_HEIGHT // 2:  # Move until the middle of the screen
-                boss['y'] += 2  # Adjust this speed as necessary
+            # Move boss down until it reaches the top of the screen
+            if boss['y'] < 50:  # Adjust the value if necessary to ensure the boss is fully visible
+                boss['y'] += boss['dy']
 
-            # Boss fires multiple bullets
+            # Boss fires bullets from two cannons
             if current_time - last_enemy_burst > enemy_fire_rate:
-                for i in range(-1, 2):  # Fire 3 bullets
-                    bullets.append({'x': boss['x'] + boss_image.get_width() // 2 - BULLET_WIDTH // 2, 'y': boss['y'] + boss_image.get_height(), 'is_enemy': True})
+                for i in range(-1, 2, 2):  # Fire from two positions
+                    bullets.append({'x': boss['x'] + i * (boss_image.get_width() // 3), 'y': boss['y'] + boss_image.get_height() // 2, 'is_enemy': True})
                 enemy_laser_sound.play()
                 last_enemy_burst = current_time
 
@@ -305,15 +270,30 @@ def update_enemies():
 
 
 
-def draw_boss(x, y, health):
-    print(f"Drawing boss at ({x}, {y}) with health: {health}")  # Debug print
-    screen.blit(boss_image, (x, y))
-    # Draw the health bar above the boss
-    pygame.draw.rect(screen, RED, (x, y - 10, 100, 10))  # Background health bar
-    pygame.draw.rect(screen, WHITE, (x, y - 10, 100 * (health / boss_health), 10))  # Foreground health bar
-    draw_text('King of Aliens', small_font, WHITE, screen, x + boss_image.get_width() // 2, y - 20)
-    draw_text('Raviolis', small_font, WHITE, screen, x + boss_image.get_width() // 2, y - 10)
 
+
+def draw_boss(x, y, health, hit=False):
+    if hit:
+        # Draw a red-tinted boss when hit
+        boss_image_tinted = pygame.Surface(boss_image.get_size())
+        boss_image_tinted.fill((255, 0, 0))  # Red tint
+        boss_image_tinted.blit(boss_image, (0, 0), special_flags=pygame.BLEND_MULT)
+        screen.blit(boss_image_tinted, (x, y))
+    else:
+        screen.blit(boss_image, (x, y))
+    
+    # Draw the health bar at the top center of the screen
+    health_bar_width = 300
+    health_bar_height = 20
+    health_bar_x = (SCREEN_WIDTH - health_bar_width) // 2
+    health_bar_y = 10
+    
+    pygame.draw.rect(screen, RED, (health_bar_x, health_bar_y, health_bar_width, health_bar_height))  # Background health bar
+    pygame.draw.rect(screen, GREEN, (health_bar_x, health_bar_y, health_bar_width * (health / boss_health), health_bar_height))  # Foreground health bar
+    
+    # Draw boss title text below the health bar
+    draw_text('King of Aliens', small_font, WHITE, screen, SCREEN_WIDTH // 2, health_bar_y + health_bar_height + 20)
+    draw_text('Raviolis', small_font, WHITE, screen, SCREEN_WIDTH // 2, health_bar_y + health_bar_height + 50)
 
 
 
@@ -361,49 +341,39 @@ def main():
             draw_game_status()  # Draw score and wave number
 
             if update_bullets():
+                # Player hit by enemy bullet
                 game_active = False
-                gameover_music.play()
-                if score > highscore:
-                    highscore = score
-                draw_game_over()
-                pygame.display.flip()
-                pygame.time.wait(3000)  # Show game over screen for 3 seconds
-                draw_start_menu()  # Show the start menu again after game over
-                continue
+                pygame.mixer.music.stop()
+                game_over_sound.play()
+                break
 
-            if check_enemy_collisions():
-                game_active = False
-                gameover_music.play()
-                if score > highscore:
-                    highscore = score
-                draw_game_over()
-                pygame.display.flip()
-                pygame.time.wait(3000)  # Show game over screen for 3 seconds
-                draw_start_menu()  # Show the start menu again after game over
-                continue
+            update_enemies()
 
-            if update_enemies():
-                game_active = False
-                gameover_music.play()
-                if score > highscore:
-                    highscore = score
-                draw_game_over()
-                pygame.display.flip()
-                pygame.time.wait(3000)  # Show game over screen for 3 seconds
-                draw_start_menu()  # Show the start menu again after game over
-                continue
-
-            # Draw everything
-            draw_explosions()
-            for bullet in bullets:
-                draw_bullet(bullet['x'], bullet['y'])
+            # Draw enemies
             for enemy in enemies:
-                draw_enemy(enemy['x'], enemy['y'])
+                draw_enemy(enemy['x'], enemy['y'], enemy['health'])
+
             if boss_appears and boss:
-                draw_boss(boss['x'], boss['y'], boss['health'])
+                hit = False
+                if boss['health'] < boss_health:
+                    hit = True
+                draw_boss(boss['x'], boss['y'], boss['health'], hit)
+
+            # Draw bullets
+            for bullet in bullets:
+                if bullet.get('is_enemy'):
+                    pygame.draw.rect(screen, RED, pygame.Rect(bullet['x'], bullet['y'], BULLET_WIDTH, BULLET_HEIGHT))
+                else:
+                    pygame.draw.rect(screen, GREEN, pygame.Rect(bullet['x'], bullet['y'], BULLET_WIDTH, BULLET_HEIGHT))
+
+            # Draw explosions
+            for explosion in explosions[:]:
+                screen.blit(explosion_image, (explosion['x'], explosion['y']))
+                explosions.remove(explosion)
 
             pygame.display.flip()
-            clock.tick(30)  # Frame rate
+            clock.tick(60)  # Limit the frame rate to 60 FPS
+
 
 
 if __name__ == "__main__":
