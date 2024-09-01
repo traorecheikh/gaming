@@ -267,15 +267,40 @@ def update_enemies():
 
 
 
+import pygame
+import time
+
+# Initialize global variables for the flash effect
+flash_start_time = None
+flash_duration = 0.2  # Duration of the flash in seconds
+flash_active = False
+
 def draw_boss(x, y, health, hit=False):
-    if hit:
-        # Draw a red-tinted boss when hit
-        boss_image_tinted = pygame.Surface(boss_image.get_size(), pygame.SRCALPHA)
-        boss_image_tinted.fill((255, 0, 0, 128))  # Semi-transparent red tint
-        boss_image_tinted.blit(boss_image, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        screen.blit(boss_image_tinted, (x, y))
+    global flash_start_time, flash_duration, flash_active
+
+    current_time = time.time()
+
+    if hit and not flash_active:
+        # Start the flash effect
+        flash_start_time = current_time
+        flash_active = True
+
+    if flash_active:
+        # Check if the flash duration has elapsed
+        if current_time - flash_start_time < flash_duration:
+            # Draw with the red tint for the flash effect
+            boss_image_tinted = pygame.Surface(boss_image.get_size(), pygame.SRCALPHA)
+            boss_image_tinted.fill((255, 0, 0, 128))  # Semi-transparent red tint
+            boss_image_tinted.blit(boss_image, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            screen.blit(boss_image_tinted, (x, y))
+        else:
+            # Flashing finished, reset state
+            flash_active = False
+            screen.blit(boss_image, (x, y))
     else:
+        # Draw boss in normal state
         screen.blit(boss_image, (x, y))
+
     
     # Draw the health bar at the top center of the screen
     health_bar_width = 300
