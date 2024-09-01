@@ -39,7 +39,6 @@ spaceship_speed = 5
 bullet_speed = 5  # Speed for player bullets
 enemy_bullet_speed = 0.25  # Speed for enemy bullets (slowed down significantly)
 enemy_speed = 2
-enemy_spawn_rate = 30  # Reduced spawn rate to make it slower
 enemy_fire_rate = 150  # Enemies fire slower
 special_ex_max = 100
 special_ex_fill_rate = 5
@@ -47,7 +46,6 @@ enemy_health = 3
 score = 0
 highscore = 0
 wave = 1
-enemies_per_wave = 10
 max_enemies_on_screen = 4
 game_active = False
 
@@ -89,20 +87,29 @@ def update_bullets():
             bullet['y'] -= bullet_speed * 2  # Special ray moves faster
         else:
             bullet['y'] -= bullet_speed
-
-        if bullet['y'] < 0:
+        
+        if bullet['y'] < 0 or bullet['y'] > SCREEN_HEIGHT:
             bullets.remove(bullet)
-        else:
-            for enemy in enemies[:]:
-                if (enemy['x'] < bullet['x'] < enemy['x'] + ENEMY_WIDTH or enemy['x'] < bullet['x'] + BULLET_WIDTH < enemy['x'] + ENEMY_WIDTH) and (enemy['y'] < bullet['y'] < enemy['y'] + ENEMY_HEIGHT or enemy['y'] < bullet['y'] + BULLET_HEIGHT < enemy['y'] + ENEMY_HEIGHT):
-                    enemy['health'] -= 1
-                    bullets.remove(bullet)
-                    if enemy['health'] <= 0:
-                        enemies.remove(enemy)
-                        score += 1
-                        explosions.append({'x': enemy['x'], 'y': enemy['y']})
-                        explosion_sound.play()
-                    break
+            continue
+
+        # Check collision with enemies
+        for enemy in enemies[:]:
+            if (enemy['x'] < bullet['x'] < enemy['x'] + ENEMY_WIDTH or enemy['x'] < bullet['x'] + BULLET_WIDTH < enemy['x'] + ENEMY_WIDTH) and (enemy['y'] < bullet['y'] < enemy['y'] + ENEMY_HEIGHT or enemy['y'] < bullet['y'] + BULLET_HEIGHT < enemy['y'] + ENEMY_HEIGHT):
+                enemy['health'] -= 1
+                bullets.remove(bullet)
+                if enemy['health'] <= 0:
+                    enemies.remove(enemy)
+                    score += 1
+                    explosions.append({'x': enemy['x'], 'y': enemy['y']})
+                    explosion_sound.play()
+                break
+        
+        # Check collision with player
+        if bullet.get('is_enemy'):
+            if (spaceship_x < bullet['x'] < spaceship_x + SPACESHIP_WIDTH or spaceship_x < bullet['x'] + BULLET_WIDTH < spaceship_x + SPACESHIP_WIDTH) and (spaceship_y < bullet['y'] < spaceship_y + SPACESHIP_HEIGHT or spaceship_y < bullet['y'] + BULLET_HEIGHT < spaceship_y + SPACESHIP_HEIGHT):
+                return True  # Player hit by enemy bullet
+
+    return False
 
 def update_enemies():
     global enemies
@@ -119,7 +126,11 @@ def update_enemies():
         enemy['x'] += dx * enemy_speed
         enemy['y'] += dy * enemy_speed
 
-        # Check if enemy has reached the bottom of the screen
+        # Ensure enemies stay within screen bounds
+        enemy['x'] = max(0, min(enemy['x'], SCREEN_WIDTH - ENEMY_WIDTH))
+        enemy['y'] = max(0, min(enemy['y'], SCREEN_HEIGHT - ENEMY_HEIGHT))
+
+        # Remove enemies that go off-screen
         if enemy['y'] > SCREEN_HEIGHT:
             enemies.remove(enemy)
             return True
@@ -127,15 +138,7 @@ def update_enemies():
         # Spawn enemy bullets
         if random.randint(1, enemy_fire_rate) == 1:
             bullets.append({'x': enemy['x'] + ENEMY_WIDTH // 2 - BULLET_WIDTH // 2, 'y': enemy['y'] + ENEMY_HEIGHT, 'is_enemy': True})
-        
-        # Move enemy bullets
-        for bullet in bullets[:]:
-            if bullet.get('is_enemy'):
-                bullet['y'] += enemy_bullet_speed
-                if bullet['y'] > SCREEN_HEIGHT:
-                    bullets.remove(bullet)
-                elif (spaceship_x < bullet['x'] < spaceship_x + SPACESHIP_WIDTH or spaceship_x < bullet['x'] + BULLET_WIDTH < spaceship_x + SPACESHIP_WIDTH) and (spaceship_y < bullet['y'] < spaceship_y + SPACESHIP_HEIGHT or spaceship_y < bullet['y'] + BULLET_HEIGHT < spaceship_y + SPACESHIP_HEIGHT):
-                    return True
+
     return False
 
 def draw_special_ex_bar(experience):
@@ -155,7 +158,7 @@ def draw_game_over():
     pygame.display.flip()
 
 def reset_game():
-    global spaceship_x, spaceship_y, bullets, enemies, special_ex, game_active, wave, enemies_per_wave, explosions, enemy_health, score
+    global spaceship_x, spaceship_y, bullets, enemies, special_ex, game_active, wave, highscore, explosions, enemy_health, score, enemy_fire_rate
 
     spaceship_x = SCREEN_WIDTH // 2 - SPACESHIP_WIDTH // 2
     spaceship_y = SCREEN_HEIGHT - SPACESHIP_HEIGHT - 10
@@ -165,13 +168,19 @@ def reset_game():
     explosions = []
     score = 0
     wave = 1
-    enemies_per_wave = 10
     enemy_fire_rate = 150
     enemy_health = 3
     game_active = True
 
+def spawn_enemies():
+    global enemies
+    num_enemies = 10 * wave  # Calculate the number of enemies for the current wave
+    while len(enemies) < min(num_enemies, max_enemies_on_screen):
+        x = random.randint(0, SCREEN_WIDTH - ENEMY_WIDTH)
+        enemies.append({'x': x, 'y': -ENEMY_HEIGHT, 'health': enemy_health})
+
 def main():
-    global spaceship_x, spaceship_y, bullets, enemies, special_ex, game_active, wave, highscore, enemies_per_wave, explosions, enemy_health, score
+    global spaceship_x, spaceship_y, bullets, enemies, special_ex, game_active, wave, highscore, explosions, enemy_health, score, enemy_fire_rate
 
     # Initialize game state
     reset_game()
@@ -209,20 +218,37 @@ def main():
 
             spaceship_x = max(0, min(spaceship_x, SCREEN_WIDTH - SPACESHIP_WIDTH))
 
-            if len(enemies) < min(enemies_per_wave, max_enemies_on_screen):
-                x = random.randint(0, max(SCREEN_WIDTH - ENEMY_WIDTH, 0))
-                enemies.append({'x': x, 'y': -ENEMY_HEIGHT, 'health': enemy_health})
+            # Spawn enemies if needed
+            if len(enemies) == 0:
+                spawn_enemies()
 
+            # Fill special experience
             special_ex = min(special_ex + special_ex_fill_rate, special_ex_max)
 
             screen.blit(background_image, (0, 0))
             draw_spaceship(spaceship_x, spaceship_y)
-            update_bullets()
+
+            if update_bullets():
+                game_active = False
+                gameover_music.play()
+                if score > highscore:
+                    highscore = score
+                draw_game_over()
+                pygame.display.flip()
+                pygame.time.wait(3000)  # Show game over screen for 3 seconds
+                draw_start_menu()  # Show the start menu again after game over
+                continue
+
             if update_enemies():
                 game_active = False
                 gameover_music.play()
                 if score > highscore:
                     highscore = score
+                draw_game_over()
+                pygame.display.flip()
+                pygame.time.wait(3000)  # Show game over screen for 3 seconds
+                draw_start_menu()  # Show the start menu again after game over
+                continue
 
             for bullet in bullets:
                 draw_bullet(bullet['x'], bullet['y'])
@@ -240,15 +266,9 @@ def main():
             # Progress to the next wave if all enemies are cleared
             if not enemies:
                 wave += 1
-                enemies_per_wave = int(enemies_per_wave * 1.5)
-                enemy_fire_rate = max(30, enemy_fire_rate - 10)  # Make it easier, not too hard
                 enemy_health = min(10, enemy_health + 1)  # Increase difficulty
-
-        else:
-            draw_game_over()
-            pygame.display.flip()
-            pygame.time.wait(3000)  # Show game over screen for 3 seconds
-            reset_game()  # Restart the game after showing game over
+                enemy_fire_rate = max(30, enemy_fire_rate - 10)  # Make it easier, not too hard
+                spawn_enemies()
 
 if __name__ == "__main__":
     main()
