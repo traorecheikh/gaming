@@ -1,29 +1,24 @@
 import pygame
 import random
-import math
 
-# Initialize Pygame
 pygame.init()
 
-# Screen dimensions
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Galaga-like Game")
+pygame.display.set_caption("space")
 GREEN = (0, 255, 0)
 
-
-# Load images
 background_image = pygame.image.load('background.jpg').convert()
 spaceship_image = pygame.image.load('player.png').convert_alpha()
 spaceship_image = pygame.transform.scale(spaceship_image, (50, 50))
 enemy_image = pygame.image.load('enemy.png').convert_alpha()
 enemy_image = pygame.transform.scale(enemy_image, (50, 50))
 explosion_image = pygame.image.load('explosion.png').convert_alpha()
-explosion_image = pygame.transform.scale(explosion_image, (50, 50))  # Adjust size as needed
+explosion_image = pygame.transform.scale(explosion_image, (50, 50))
 boss_image = pygame.image.load('boss.png').convert_alpha()
-boss_image = pygame.transform.scale(boss_image, (300, 300))  # Adjust size as needed
-print("Boss image size:", boss_image.get_size())  # Print boss image dimensions
+boss_image = pygame.transform.scale(boss_image, (300, 300))
+print("Boss image size:", boss_image.get_size())
 
 
 # Load sounds
@@ -38,7 +33,6 @@ boss_music = pygame.mixer.Sound('boss.mp3')  # Boss battle music
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-
 # Game properties
 SPACESHIP_WIDTH, SPACESHIP_HEIGHT = spaceship_image.get_size()
 ENEMY_WIDTH, ENEMY_HEIGHT = enemy_image.get_size()
@@ -175,34 +169,23 @@ def reset_game():
     boss_appears = False  # Ensure it is initialized
 
 
-
 def spawn_enemies():
     global enemies, boss_appears, boss
 
-    if wave > 0 and not boss_appears:
+    # If the wave is 3 or higher, spawn the boss
+    if wave >= 0 and not boss_appears:
         print("Spawning boss")  # Debug print statement
         boss_appears = True
-        # Start the boss just off-screen above
         boss = {'x': SCREEN_WIDTH // 2 - boss_image.get_width() // 2, 'y': -boss_image.get_height(), 'dx': 2, 'dy': 2, 'health': boss_health}
         pygame.mixer.music.load('boss.mp3')
         pygame.mixer.music.play(-1)  # Loop boss music
         return
 
     # Regular enemies
-    num_enemies = int(wave * 0.5 * 10)  # Calculate the number of enemies for the current wave
+    num_enemies = int(wave * 0.5 * 10)  # Calculate the number of enemies
     while len(enemies) < min(num_enemies, max_enemies_on_screen):
         x = random.randint(0, SCREEN_WIDTH - ENEMY_WIDTH)
         enemies.append({'x': x, 'y': -ENEMY_HEIGHT, 'dx': random.choice([-1, 1]), 'target_y': random.randint(100, SCREEN_HEIGHT // 2), 'health': enemy_health})
-
-
-    # Regular enemies
-    num_enemies = int(wave * 0.5 * 10)  # Calculate the number of enemies for the current wave
-    while len(enemies) < min(num_enemies, max_enemies_on_screen):
-        x = random.randint(0, SCREEN_WIDTH - ENEMY_WIDTH)
-        enemies.append({'x': x, 'y': -ENEMY_HEIGHT, 'dx': random.choice([-1, 1]), 'target_y': random.randint(100, SCREEN_HEIGHT // 2), 'health': enemy_health})
-
-
-
 
 def update_enemies():
     global enemies, last_enemy_burst, enemy_entrance_timer, boss, boss_appears
@@ -267,40 +250,15 @@ def update_enemies():
 
 
 
-import pygame
-import time
-
-# Initialize global variables for the flash effect
-flash_start_time = None
-flash_duration = 0.2  # Duration of the flash in seconds
-flash_active = False
-
 def draw_boss(x, y, health, hit=False):
-    global flash_start_time, flash_duration, flash_active
-
-    current_time = time.time()
-
-    if hit and not flash_active:
-        # Start the flash effect
-        flash_start_time = current_time
-        flash_active = True
-
-    if flash_active:
-        # Check if the flash duration has elapsed
-        if current_time - flash_start_time < flash_duration:
-            # Draw with the red tint for the flash effect
-            boss_image_tinted = pygame.Surface(boss_image.get_size(), pygame.SRCALPHA)
-            boss_image_tinted.fill((255, 0, 0, 128))  # Semi-transparent red tint
-            boss_image_tinted.blit(boss_image, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-            screen.blit(boss_image_tinted, (x, y))
-        else:
-            # Flashing finished, reset state
-            flash_active = False
-            screen.blit(boss_image, (x, y))
+    if hit:
+        # Draw a red-tinted boss when hit
+        boss_image_tinted = pygame.Surface(boss_image.get_size(), pygame.SRCALPHA)
+        boss_image_tinted.fill((255, 0, 0, 128))  # Semi-transparent red tint
+        boss_image_tinted.blit(boss_image, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        screen.blit(boss_image_tinted, (x, y))
     else:
-        # Draw boss in normal state
         screen.blit(boss_image, (x, y))
-
     
     # Draw the health bar at the top center of the screen
     health_bar_width = 300
@@ -385,6 +343,7 @@ def main():
 
             if len(enemies) == 0 and not boss_appears:
                 wave += 1
+                print(f"Wave: {wave}")  # Debug print statement
                 spawn_enemies()
 
             screen.blit(background_image, (0, 0))
@@ -395,7 +354,7 @@ def main():
                 handle_game_over()
                 break
 
-            if update_enemies() == False and boss_appears == False:
+            if update_enemies() == False and not boss_appears:
                 handle_victory()
 
             for enemy in enemies:
@@ -417,7 +376,7 @@ def main():
 
             pygame.display.flip()
             clock.tick(60)
-  
+
 
 if __name__ == "__main__":
     main()
