@@ -8,7 +8,7 @@ SCREEN_HEIGHT = 600
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("space")
 GREEN = (0, 255, 0)
-
+bonjour = 0
 background_image = pygame.image.load('background.jpg').convert()
 spaceship_image = pygame.image.load('player.png').convert_alpha()
 spaceship_image = pygame.transform.scale(spaceship_image, (50, 50))
